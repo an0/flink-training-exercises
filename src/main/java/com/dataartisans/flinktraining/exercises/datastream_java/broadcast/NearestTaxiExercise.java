@@ -97,7 +97,7 @@ public class NearestTaxiExercise extends ExerciseBase {
 		}
 	}
 
-	final static MapStateDescriptor queryDescriptor = new MapStateDescriptor<>(
+	private final static MapStateDescriptor queryDescriptor = new MapStateDescriptor<>(
 			"queries",
 			BasicTypeInfo.LONG_TYPE_INFO,
 			TypeInformation.of(Query.class));
@@ -119,14 +119,11 @@ public class NearestTaxiExercise extends ExerciseBase {
 
 		// add a socket source
 		BroadcastStream<Query> queryStream = env.socketTextStream("localhost", 9999)
-				.map(new MapFunction<String, Query>() {
-					@Override
-					public Query map(String msg) throws Exception {
-						String[] parts = msg.split(",\\s*");
-						return new Query(
-								Float.valueOf(parts[0]),	// longitude
-								Float.valueOf(parts[1]));	// latitude
-					}
+				.map((MapFunction<String, Query>) msg -> {
+					String[] parts = msg.split(",\\s*");
+					return new Query(
+							Float.valueOf(parts[0]),	// longitude
+							Float.valueOf(parts[1]));	// latitude
 				})
 				.broadcast(queryDescriptor);
 
@@ -137,12 +134,7 @@ public class NearestTaxiExercise extends ExerciseBase {
 
 		DataStream<Tuple3<Long, Long, Float>> nearest = reports
 				// key by the queryId
-				.keyBy(new KeySelector<Tuple3<Long, Long, Float>, Long>() {
-					@Override
-					public Long getKey(Tuple3<Long, Long, Float> value) throws Exception {
-						return value.f0;
-					}
-				})
+				.keyBy((KeySelector<Tuple3<Long, Long, Float>, Long>) value -> value.f0)
 				.process(new ClosestTaxi());
 
 		printOrTest(nearest);
@@ -156,13 +148,14 @@ public class NearestTaxiExercise extends ExerciseBase {
 		private transient ValueState<Tuple2<Long, Float>> closest;
 
 		@Override
-		public void open(Configuration parameters) throws Exception {
+		public void open(Configuration parameters) {
 			ValueStateDescriptor<Tuple2<Long, Float>> descriptor =
-					new ValueStateDescriptor<Tuple2<Long, Float>>(
+					new ValueStateDescriptor<>(
 							// state name
 							"report",
 							// type information of state
-							TypeInformation.of(new TypeHint<Tuple2<Long, Float>>() {}));
+							TypeInformation.of(new TypeHint<Tuple2<Long, Float>>() {
+							}));
 			closest = getRuntimeContext().getState(descriptor);
 		}
 

@@ -22,6 +22,8 @@ import com.dataartisans.flinktraining.exercises.datastream_java.sources.Checkpoi
 import com.dataartisans.flinktraining.exercises.datastream_java.sources.CheckpointedTaxiRideSource;
 import com.dataartisans.flinktraining.exercises.datastream_java.utils.ExerciseBase;
 import com.dataartisans.flinktraining.exercises.datastream_java.utils.MissingSolutionException;
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
@@ -80,22 +82,57 @@ public class ExpiringStateExercise extends ExerciseBase {
 	}
 
 	public static class EnrichmentFunction extends CoProcessFunction<TaxiRide, TaxiFare, Tuple2<TaxiRide, TaxiFare>> {
+        private ValueState<TaxiRide> rideValueState;
+        private ValueState<TaxiFare> fareValueState;
 
-		@Override
-		public void open(Configuration config) throws Exception {
-			throw new MissingSolutionException();
-		}
+        @Override
+        public void open(Configuration config) throws Exception {
+            ValueStateDescriptor<TaxiRide> rideDescriptor =
+                    new ValueStateDescriptor<>("ride", TaxiRide.class);
+            rideValueState = getRuntimeContext().getState(rideDescriptor);
+
+            ValueStateDescriptor<TaxiFare> fareDescriptor =
+                    new ValueStateDescriptor<>("fare", TaxiFare.class);
+            fareValueState = getRuntimeContext().getState(fareDescriptor);
+        }
 
 		@Override
 		public void onTimer(long timestamp, OnTimerContext ctx, Collector<Tuple2<TaxiRide, TaxiFare>> out) throws Exception {
-		}
+            TaxiFare fare = fareValueState.value();
+            if (fare != null) {
+                ctx.output(unmatchedFares, fare);
+                fareValueState.clear();
+            }
+
+            TaxiRide ride = rideValueState.value();
+            if (ride != null) {
+                ctx.output(unmatchedRides, ride);
+                rideValueState.clear();
+            }
+        }
 
 		@Override
 		public void processElement1(TaxiRide ride, Context context, Collector<Tuple2<TaxiRide, TaxiFare>> out) throws Exception {
+			TaxiFare fare = fareValueState.value();
+			if (fare != null) {
+			    out.collect(new Tuple2(ride, fare));
+			    fareValueState.clear();
+            } else {
+			    rideValueState.update(ride);
+			    context.timerService().registerEventTimeTimer(context.timestamp());
+            }
 		}
 
 		@Override
 		public void processElement2(TaxiFare fare, Context context, Collector<Tuple2<TaxiRide, TaxiFare>> out) throws Exception {
+			TaxiRide ride = rideValueState.value();
+			if (ride != null) {
+			    out.collect(new Tuple2(ride, fare));
+			    rideValueState.clear();
+            } else {
+			    fareValueState.update(fare);
+			    context.timerService().registerEventTimeTimer(context.timestamp());
+            }
 		}
 	}
 }

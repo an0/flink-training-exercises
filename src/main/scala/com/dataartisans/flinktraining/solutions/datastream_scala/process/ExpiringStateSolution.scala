@@ -16,8 +16,14 @@
 
 package com.dataartisans.flinktraining.solutions.datastream_scala.process
 
-import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.{TaxiFare, TaxiRide}
-import com.dataartisans.flinktraining.exercises.datastream_java.sources.{CheckpointedTaxiFareSource, CheckpointedTaxiRideSource}
+import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.{
+  TaxiFare,
+  TaxiRide
+}
+import com.dataartisans.flinktraining.exercises.datastream_java.sources.{
+  CheckpointedTaxiFareSource,
+  CheckpointedTaxiRideSource
+}
 import com.dataartisans.flinktraining.exercises.datastream_java.utils.ExerciseBase
 import com.dataartisans.flinktraining.exercises.datastream_java.utils.ExerciseBase._
 import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
@@ -57,12 +63,18 @@ object ExpiringStateSolution {
     env.setParallelism(ExerciseBase.parallelism)
 
     val rides = env
-      .addSource(rideSourceOrTest(new CheckpointedTaxiRideSource(ridesFile, servingSpeedFactor)))
-      .filter { ride => ride.isStart && (ride.rideId % 1000 != 0) }
+      .addSource(
+        rideSourceOrTest(
+          new CheckpointedTaxiRideSource(ridesFile, servingSpeedFactor)))
+      .filter { ride =>
+        ride.isStart && (ride.rideId % 1000 != 0)
+      }
       .keyBy("rideId")
 
     val fares = env
-      .addSource(fareSourceOrTest(new CheckpointedTaxiFareSource(faresFile, servingSpeedFactor)))
+      .addSource(
+        fareSourceOrTest(
+          new CheckpointedTaxiFareSource(faresFile, servingSpeedFactor)))
       .keyBy("rideId")
 
     val processed = rides.connect(fares).process(new EnrichmentFunction)
@@ -72,7 +84,8 @@ object ExpiringStateSolution {
     env.execute("ExpiringState (scala)")
   }
 
-  class EnrichmentFunction extends CoProcessFunction[TaxiRide, TaxiFare, (TaxiRide, TaxiFare)] {
+  class EnrichmentFunction
+      extends CoProcessFunction[TaxiRide, TaxiFare, (TaxiRide, TaxiFare)] {
     // keyed, managed state
     lazy val rideState: ValueState[TaxiRide] = getRuntimeContext.getState(
       new ValueStateDescriptor[TaxiRide]("saved ride", classOf[TaxiRide]))
@@ -80,14 +93,16 @@ object ExpiringStateSolution {
       new ValueStateDescriptor[TaxiFare]("saved fare", classOf[TaxiFare]))
 
     override def processElement1(ride: TaxiRide,
-                                 context: CoProcessFunction[TaxiRide, TaxiFare, (TaxiRide, TaxiFare)]#Context,
+                                 context: CoProcessFunction[
+                                   TaxiRide,
+                                   TaxiFare,
+                                   (TaxiRide, TaxiFare)]#Context,
                                  out: Collector[(TaxiRide, TaxiFare)]): Unit = {
       val fare = fareState.value
       if (fare != null) {
         fareState.clear()
         out.collect((ride, fare))
-      }
-      else {
+      } else {
         rideState.update(ride)
         // as soon as the watermark arrives, we can stop waiting for the corresponding fare
         context.timerService.registerEventTimeTimer(ride.getEventTime)
@@ -95,14 +110,16 @@ object ExpiringStateSolution {
     }
 
     override def processElement2(fare: TaxiFare,
-                                 context: CoProcessFunction[TaxiRide, TaxiFare, (TaxiRide, TaxiFare)]#Context,
+                                 context: CoProcessFunction[
+                                   TaxiRide,
+                                   TaxiFare,
+                                   (TaxiRide, TaxiFare)]#Context,
                                  out: Collector[(TaxiRide, TaxiFare)]): Unit = {
       val ride = rideState.value
       if (ride != null) {
         rideState.clear()
         out.collect((ride, fare))
-      }
-      else {
+      } else {
         fareState.update(fare)
         // as soon as the watermark arrives, we can stop waiting for the corresponding ride
         context.timerService.registerEventTimeTimer(fare.getEventTime)
@@ -110,7 +127,10 @@ object ExpiringStateSolution {
     }
 
     override def onTimer(timestamp: Long,
-                         ctx: CoProcessFunction[TaxiRide, TaxiFare, (TaxiRide, TaxiFare)]#OnTimerContext,
+                         ctx: CoProcessFunction[
+                           TaxiRide,
+                           TaxiFare,
+                           (TaxiRide, TaxiFare)]#OnTimerContext,
                          out: Collector[(TaxiRide, TaxiFare)]): Unit = {
       if (fareState.value != null) {
         ctx.output(unmatchedFares, fareState.value)

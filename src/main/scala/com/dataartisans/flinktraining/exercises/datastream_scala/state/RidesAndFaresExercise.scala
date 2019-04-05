@@ -16,9 +16,18 @@
 
 package com.dataartisans.flinktraining.exercises.datastream_scala.state
 
-import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.{TaxiFare, TaxiRide}
-import com.dataartisans.flinktraining.exercises.datastream_java.sources.{TaxiFareSource, TaxiRideSource}
-import com.dataartisans.flinktraining.exercises.datastream_java.utils.{ExerciseBase, MissingSolutionException}
+import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.{
+  TaxiFare,
+  TaxiRide
+}
+import com.dataartisans.flinktraining.exercises.datastream_java.sources.{
+  TaxiFareSource,
+  TaxiRideSource
+}
+import com.dataartisans.flinktraining.exercises.datastream_java.utils.{
+  ExerciseBase,
+  MissingSolutionException
+}
 import com.dataartisans.flinktraining.exercises.datastream_java.utils.ExerciseBase._
 import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
 import org.apache.flink.api.java.utils.ParameterTool
@@ -47,7 +56,7 @@ object RidesAndFaresExercise {
     val ridesFile = params.get("rides", ExerciseBase.pathToRideData)
     val faresFile = params.get("fares", ExerciseBase.pathToFareData)
 
-    val delay = 60;               // at most 60 seconds of delay
+    val delay = 60; // at most 60 seconds of delay
     val servingSpeedFactor = 1800 // 30 minutes worth of events are served every second
 
     // set up streaming execution environment
@@ -56,12 +65,18 @@ object RidesAndFaresExercise {
     env.setParallelism(ExerciseBase.parallelism)
 
     val rides = env
-      .addSource(rideSourceOrTest(new TaxiRideSource(ridesFile, delay, servingSpeedFactor)))
-      .filter { ride => ride.isStart }
+      .addSource(
+        rideSourceOrTest(
+          new TaxiRideSource(ridesFile, delay, servingSpeedFactor)))
+      .filter { ride =>
+        ride.isStart
+      }
       .keyBy("rideId")
 
     val fares = env
-      .addSource(fareSourceOrTest(new TaxiFareSource(faresFile, delay, servingSpeedFactor)))
+      .addSource(
+        fareSourceOrTest(
+          new TaxiFareSource(faresFile, delay, servingSpeedFactor)))
       .keyBy("rideId")
 
     val processed = rides
@@ -73,14 +88,16 @@ object RidesAndFaresExercise {
     env.execute("Join Rides with Fares (scala RichCoFlatMap)")
   }
 
-  class EnrichmentFunction extends RichCoFlatMapFunction[TaxiRide, TaxiFare, (TaxiRide, TaxiFare)] {
+  class EnrichmentFunction
+      extends RichCoFlatMapFunction[TaxiRide, TaxiFare, (TaxiRide, TaxiFare)] {
 
-    override def flatMap1(ride: TaxiRide, out: Collector[(TaxiRide, TaxiFare)]): Unit = {
+    override def flatMap1(ride: TaxiRide,
+                          out: Collector[(TaxiRide, TaxiFare)]): Unit = {
       throw new MissingSolutionException();
     }
 
-    override def flatMap2(fare: TaxiFare, out: Collector[(TaxiRide, TaxiFare)]): Unit = {
-    }
+    override def flatMap2(fare: TaxiFare,
+                          out: Collector[(TaxiRide, TaxiFare)]): Unit = {}
 
   }
 
